@@ -1,0 +1,27 @@
+---
+title: "Peer review with ghclass"
+author: "Therese Anders and Mine Çetinkaya-Rundel"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Course management with ghclass}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Creating a roster of author-reviewer assignments
+We recommend randomizing the order of student user names before creating the roster to prevent non-random clusters of students repeatedly reviewing each other's work. 
+
+# Assigning reviews
+The `peer_assign` function distributes review assignment to reviewers. It grabs any `.Rmd` and data files (as specified by the instructor) in the author's repository and clones them into a new folder into the designated reviewers' repositories. 
+
+Author files are anonymized simultaneously.
+
+# Extracting grades
