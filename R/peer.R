@@ -1,3 +1,5 @@
+# The following two functions (peer_anonymize_file and remove_author_rmd) are prob not needed any longer
+
 #' Anonymize file
 #'
 #' `anonymize_file` removes all identifying student information
@@ -70,7 +72,7 @@ peer_assign = function(repo1,
 
                                  purrr::walk(repo2,
                                              function(repo2){
-                                               if(!file_exists(repo2, filename_new, branch) | overwrite == T){
+                                               if(!file_exists(repo2, filename_new, branch, verbose = F) | overwrite == T){
 
                                                  put_file(repo = repo2,
                                                           path = filename_new,
@@ -98,9 +100,19 @@ func_translate = function(vec, id){
 
 #' Create peer review roster
 #'
+#' `peer_create_roster` creates data frame of random assignments of author files to reviewers. By default, the output is saved to a `.csv` file in the current working directory that incorporates the current date and random seed as part of the file name.
+#'
 #' @param user Character. A vector of GitHub user names.
 #' @param m Numeric. Number of reviews per user. Must be larger than zero and smaller than the number of users.
-#' `peer_create_roster` creates data frame of random assignments of author files to reviewers.
+#' @param seed Numeric. Random seed for assignment, defaults to `12345`.
+#' @param write_csv Logical. Whether the roster data frame should be saved to a `.csv` file in the current working directory, defaults to TRUE.
+#'
+#' @example
+#' \dontrun{
+#' peer_create_roster(c("anya", "bruno", "celine", "diego"), 3)
+#' }
+#'
+#' @export
 #'
 peer_create_roster = function(user,
                               m,
@@ -109,18 +121,23 @@ peer_create_roster = function(user,
 
   stopifnot(length(user) > 1, m > 0, m < length(user))
 
-  df = data.frame(id = seq_len(length(user)),
-                  user = user)
-
   set.seed(seed)
   j = sample(2:length(user), m)
 
   res = purrr::map(j, ~ g(.x, length(user)))
-  res_named = purrr::map(res, ~ user[func_translate(.x, df$id)])
-  res_df = cbind(df, do.call(cbind, res_named))
+  res_df = setNames(data.frame(seq_len(length(user)),
+                               user,
+                               do.call(cbind, purrr::map(res, ~ user[func_translate(.x, seq_len(length(user)))]))),
+                    c("id", "user", purrr::map_chr(1:m, ~ paste0("reviewer", .x))))
 
-
+  if(write_csv){
+    fname = paste0(paste("revroster", paste0("seed", seed), sep = "_"), ".csv")
+    readr::write_csv(res_df, fname)
+  } else {
+    res_df
+  }
 }
+
 
 
 
