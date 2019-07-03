@@ -119,6 +119,8 @@ peer_create_roster = function(user,
                               seed = 12345,
                               write_csv = T){
 
+  stopifnot(is.numeric(m))
+  stopifnot(is.character(user))
   stopifnot(length(user) > 1, m > 0, m < length(user))
 
   set.seed(seed)
@@ -136,6 +138,25 @@ peer_create_roster = function(user,
   } else {
     res_df
   }
+}
+
+#' Create feedback form
+#'
+#' @param n Numerical. Number of grade fields to be included in .Rmd YAML.
+#' @param name Character.
+#' @param write_rmd Logical. Whether the feedback form should be saved to a `.Rmd` file in the current working directory, defaults to TRUE.
+#'
+#' @example
+#' \dontrun{
+#' peer_create_feedback(5, "feedback_blank", "Feedback for HW1")
+#' }
+#'
+peer_create_feedback = function(n,
+                                fname = character(),
+                                title = character(),
+                                output = "github_document",
+                                write_rmd = TRUE){
+
 }
 
 
