@@ -143,22 +143,52 @@ peer_create_roster = function(user,
 #' Create feedback form
 #'
 #' @param n Numerical. Number of grade fields to be included in .Rmd YAML.
-#' @param name Character.
+#' @param title Character. Title of form, defaults to "Feedback form."
+#' @param fname Character. File name of RMarkdown document, defaults to `feedback_blank`.
+#' @param output Character. Output parameter for `.Rmd` file, defaults to `github_document`.
 #' @param write_rmd Logical. Whether the feedback form should be saved to a `.Rmd` file in the current working directory, defaults to TRUE.
 #'
 #' @example
 #' \dontrun{
-#' peer_create_feedback(5, "feedback_blank", "Feedback for HW1")
+#' peer_create_feedback(5, "Reviewer feedback for HW1", "feedback_hw1")
 #' }
 #'
 peer_create_feedback = function(n,
-                                fname = character(),
-                                title = character(),
+                                title = "Feedback form",
+                                fname = NULL,
                                 output = "github_document",
                                 write_rmd = TRUE){
 
+  if(is.null(fname)){
+    fname = "feedback_blank"
+  } else if (grepl("\\s+", fname)){
+    fname = stringr::str_replace_all(fname, "\\s", "_")
+  }
+
+  # YAML
+  yaml_txt = sprintf("---\ntitle: \"%s\"\noutput: %s\nparams:\n%s\n---\n\n\n",
+                     title,
+                     output,
+                     paste(purrr::map_chr(1:n, function(x){paste0("  q", x, "_score: NA")}),
+                           collapse = "\n"))
+
+  # Body
+  resp = "Your response goes here..."
+  body_txt = paste("## Feedback",
+                   paste0(purrr::map(1:n,
+                                      ~ paste0(sprintf("%1$i. Place Q%1$i text here.\n\n", .x),
+                                               resp,
+                                               collapse = "\n\n")),
+                           collapse = "\n\n"),
+                   sep = "\n\n"
+                   )
+
+  doc_txt = paste0(yaml_txt, body_txt)
+
+
+  if(write_rmd){
+    cat(doc_txt, file = paste0(fname, ".Rmd"))
+  } else {
+    doc_txt
+  }
 }
-
-
-
-
