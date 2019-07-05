@@ -150,18 +150,17 @@ peer_create_roster = function(user,
 #'
 #' @example
 #' \dontrun{
-#' peer_create_feedback(5, "Reviewer feedback for HW1", "feedback_hw1")
+#' peer_create_feedback(5, "Reviewer feedback for HW1", "feedback_hw1_blank")
 #' }
 #'
 peer_create_feedback = function(n,
                                 title = "Feedback form",
-                                fname = NULL,
+                                fname = "feedback_blank",
                                 output = "github_document",
                                 write_rmd = TRUE){
 
-  if(is.null(fname)){
-    fname = "feedback_blank"
-  } else if (grepl("\\s+", fname)){
+  stopifnot(!is.null(fname))
+  if (grepl("\\s+", fname)){
     fname = stringr::str_replace_all(fname, "\\s", "_")
   }
 
