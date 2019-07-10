@@ -1,5 +1,5 @@
 ---
-title: "Peer review with ghclass"
+title: "Peer review with `ghclass`"
 author: "Therese Anders and Mine Çetinkaya-Rundel"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -9,6 +9,26 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
+<style type="text/css">
+
+h1.title {
+  font-size: 38px;
+  color: Black;
+}
+h1 { /* Header 1 */
+  font-size: 26px;
+  color: Black;
+}
+h2 { /* Header 2 */
+    font-size: 20px;
+  color: Blue;
+}
+h3 { /* Header 3 */
+  font-size: 16px;
+  color: Black;
+}
+</style>
+
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
@@ -16,12 +36,58 @@ knitr::opts_chunk$set(
 )
 ```
 
-# Creating a roster of author-reviewer assignments
-We recommend randomizing the order of student user names before creating the roster to prevent non-random clusters of students repeatedly reviewing each other's work. 
+This vignette introduces the peer review functionality included in `ghclass`. It includes a step-by-step guide to the peer review process. 
 
-# Assigning reviews
-The `peer_assign` function distributes review assignment to reviewers. It grabs any `.Rmd` and data files (as specified by the instructor) in the author's repository and clones them into a new folder into the designated reviewers' repositories. 
+For more information on the pedagogy of peer review in undergraduate courses, see the [accompanying paper](https://github.com/thereseanders/cprpaper/blob/master/cetinkayarundelanders_cpr.pdf) by the package authors.
+
+# Step-by-step guide to peer review
+
+## After assignment is completed
+
+### Creating a roster of author-reviewer assignments
+
+Given a vector of GitHub user names, the `peer_roster()` function creates data frame of random assignments of author files to reviewers.
+
+```{r}
+
+```
+
+### Moving author files to reviewers
+The `peer_assign()` function distributes review assignment to reviewers. It grabs any `.Rmd` and data files (as specified by the instructor) in the author's repository and clones them into a new folder into the designated reviewers' repositories. 
 
 Author files are anonymized simultaneously.
 
-# Extracting grades
+The entire author repository is anonymized and saved as a new folder in the reviewer's repository.
+
+### Creating feedback form for reviewers
+
+Instructors can use the `peer_create_rform()` function to create a blank feedback form and save it as an RMarkdown (`.Rmd`) file. This form should subsequently be customized by adding the questions to be answered by reviewers. Instructors can specify the number of questions to be included in the blank form. The function automatically creates parameters `q*_score` for each question in the YAML header of the RMarkdown document. These YAML parameters are later used to extract and save student scores.
+
+```{r}
+
+```
+
+### Distributing feedback forms to reviewers
+The `peer_distr_rform()` function places the customized review forms into reviewers' repositories. The feedback forms are saved in the folder containing the respective author's assignment.
+
+## After review process is completed
+
+### Collect scores given by reviewers
+`peer_collect_rscore()` collects the scores given by reviewers to authors and saves them in a new `.csv` file. 
+
+### [Optional] Strip individual scores given by reviewers
+If desired, the scores that reviewers entered into the YAML header of the reviewer feedback forms can be removed before distributing reviews back to the authors. If this is the case, authors can engage with the substantive feedback on their assignments, but do not see the scores given by the reviewers for each question.
+
+### Move reviewer feedback to author repositories
+Only select files will be moved and saved in a new folder in authors' repositories.
+
+### [Recommended] Create rating form for authors
+The `peer_create_aform()` can be used to create a author blank form used to collect authors' feedback on the reviews.
+
+### [Recommended] Distribute author rating forms 
+`peer_distr_aform()`
+
+## After author rating of reviews is completed
+
+### [Recommended] Collect scores given by authors
+`peer_collect_ascore()` collects the scores given by reviewers to authors and saves them in a new `.csv` file. Depending on the function input, `peer_collect_ascore()` appends the scores either to the original roster `.csv` file or the `.csv` file that contains reviewer scores.
