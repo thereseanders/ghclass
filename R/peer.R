@@ -157,7 +157,7 @@ peer_roster = function(user,
 
 #' Create feedback form
 #'
-#' @param n Numerical. Number of grade fields to be included in .Rmd YAML.
+#' @param n Numerical. Number of score fields to be included in .Rmd YAML.
 #' @param title Character. Title of form, defaults to "Feedback form."
 #' @param file Character. File name of RMarkdown document, defaults to `feedback_blank`.
 #' @param output Character. Output parameter for `.Rmd` file, defaults to `github_document`.
@@ -223,9 +223,9 @@ peer_blankfeedback = function(n,
   }
 }
 
-#' Extract grades from feedback forms
+#' Extract scores from feedback forms
 #'
-#' The `peer_collect_grade()` function collects grade information from the YAML of a feedback form within a student's repository. It outputs a new .csv file, with rows specifying individual question grades for each student.
+#' The `peer_collect_score()` function collects score information from the YAML of a feedback form within a student's repository. It outputs a new .csv file, with rows specifying individual question scores for each student. Note that in its current version, the function collects scores given by reviewers only. Future versions will include the capability to collect ratings
 #'
 #' @param org Character. Name of the GitHub organization.
 #' @param name Character. One or more GitHub user or team name(s).
@@ -237,7 +237,7 @@ peer_blankfeedback = function(n,
 #'
 #' @export
 #'
-peer_collect_grade = function(org,
+peer_collect_score = function(org,
                               prefix = "",
                               suffix = "",
                               file,
@@ -270,7 +270,7 @@ peer_collect_grade = function(org,
     )
   }
 
-  # Extract grades
+  # Extract scores
   m = seq_len(length(names(rdf)[grepl("^r[0-9]+$", names(rdf))]))
   author = rdf$user
 
