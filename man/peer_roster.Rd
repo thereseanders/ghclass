@@ -4,12 +4,12 @@
 \alias{peer_roster}
 \title{Create peer review roster}
 \usage{
-peer_roster(user, m, seed = 12345, write_csv = TRUE)
+peer_roster(m, user, seed = 12345, write_csv = TRUE)
 }
 \arguments{
-\item{user}{Character. A vector of GitHub user names.}
-
 \item{m}{Numeric. Number of reviews per user. Must be larger than zero and smaller than the number of users.}
+
+\item{user}{Character. A vector of GitHub user names.}
 
 \item{seed}{Numeric. Random seed for assignment, defaults to \code{12345}.}
 
