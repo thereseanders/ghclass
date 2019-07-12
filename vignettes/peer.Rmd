@@ -21,7 +21,7 @@ h1 { /* Header 1 */
 }
 h2 { /* Header 2 */
     font-size: 20px;
-  color: Blue;
+  color: DarkBlue;
 }
 h3 { /* Header 3 */
   font-size: 16px;
@@ -42,38 +42,99 @@ For more information on the pedagogy of peer review in undergraduate courses, se
 
 # Step-by-step guide to peer review
 
+Below, we set up a set of repositories for a fictional assignment "hw2" for three students using the `create_repo()` function. For a more detailed description of how to set up student repositories in a GitHub Organization, please see the `ghclass` vignette.
+```{r}
+library(ghclass)
+devtools::load_all()
+# 1) Set up vector of student user names, HW identifier prefix, and organization name
+user = c("thereseanders", "thereanders", "tnaanders")
+prefix = "hw2-"
+org = "ghclass-test"
+
+# 2) Create student- and assignment-specific repositories
+create_repo(org, user, prefix = prefix)
+
+# 3) Add students to their individual repos
+add_user_to_repo(glue::glue("{org}/{prefix}{user}"), user)
+
+# 4) Place homework instructions and files in repositories
+task <- "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/hw2_task.Rmd"
+data <- "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/iris_data.csv"
+repo_add_file(get_repo(org, filter = prefix),
+              file = c(task, data),
+              message = "Adding task and data for homework 2.")
+```
+
 ## After assignment is completed
 
 ### Creating a roster of author-reviewer assignments
 
-Given a vector of GitHub user names, the `peer_roster()` function creates data frame of random assignments of author files to reviewers.
+Given a vector of GitHub user names, the `peer_roster()` function creates data frame of random assignments of author files to reviewers. The parameter `m` specifies the number of reviewers per assignment. Instructors should choose the number of reviewers per assignment carefully, as each additional review will significantly increase the time investment for students.
 
+The function automatically randomizes the order in which students are assigned to review their peers' work. A seed is set to make the assignment of authors to reviewers reproducible. If the function default of `write_csv = TRUE` is selected, the function writes the roster to a .csv file. We recommend for instructors to set `write_csv = TRUE`, because the seed that was used to create the roster is automatically incorporated into the file name of the output
 ```{r}
-
+roster_test = peer_roster(2, user, write_csv = F, seed = 678)
+roster_test
 ```
 
 ### Moving author files to reviewers
-The `peer_assign()` function distributes review assignment to reviewers. It grabs any `.Rmd` and data files (as specified by the instructor) in the author's repository and clones them into a new folder into the designated reviewers' repositories. 
+The `peer_assign()` function distributes review assignment to reviewers. It grabs designated files in the author's repository and clones them into a new folder on reviewers' repositories, based on the roster created in the previous step. The newly created folder names are based on anonymous reviewer IDs created via `peer_roster()` in the previous step.
 
-Author files are anonymized simultaneously.
+To ensure that the process of moving files from authors' to reviewers' repositores runs smoothly and author anonymity is maintained, students should be instructed to 
 
-The entire author repository is anonymized and saved as a new folder in the reviewer's repository.
+1. not change file names, and to
+2. not add identifying information such as name, student ID, or email addresses to their assignments.
+```{r}
+peer_assign(org = org,
+            roster = roster_test,
+            file = c("hw2_task.Rmd", "iris_data.csv"),
+            prefix = prefix
+            )
+```
+
 
 ### Creating feedback form for reviewers
 
-Instructors can use the `peer_create_rform()` function to create a blank feedback form and save it as an RMarkdown (`.Rmd`) file. This form should subsequently be customized by adding the questions to be answered by reviewers. Instructors can specify the number of questions to be included in the blank form. The function automatically creates parameters `q*_score` for each question in the YAML header of the RMarkdown document. These YAML parameters are later used to extract and save student scores.
+Instructors can use the `peer_create_rform()` function to create a blank feedback form and save it as an RMarkdown (`.Rmd`) file. This form should subsequently be customized by adding the questions to be answered by reviewers. Instructors can specify the number of questions to be included in the blank form. The function automatically creates parameters `q*_score` for each question in the YAML header of the RMarkdown document. These YAML parameters are later used to extract and save student scores. 
 
+By default, the files contain an `author` field in the YAML header to prompt reviewers to identify themselves. Keeping reviewers non-anonymous (as opposed to authors) is likely to discourage overly harsh or rude reviews. If reviewers should instead stay anonymous as well, setting `author = FALSE` will remove this field.
 ```{r}
-
+peer_create_rform(5,
+                  file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/rfeedback_blank.Rmd")
 ```
 
 ### Distributing feedback forms to reviewers
-The `peer_distr_rform()` function places the customized review forms into reviewers' repositories. The feedback forms are saved in the folder containing the respective author's assignment.
+The `peer_add_file()` function can be used to place the customized review forms into reviewers' repositories, based on the review roster. The feedback forms are saved in the folder containing the respective author's assignment files.
+
+To specify that feedback forms should be placed in reviewers repositories, the `to = "r"` argument should be specified. 
+```{r}
+peer_add_file(
+        org = "ghclass-test",
+        roster = roster_test,
+        to = "r",
+        file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/rfeedback_blank.Rmd",
+        prefix = prefix
+)
+```
+
 
 ## After review process is completed
 
 ### Collect scores given by reviewers
-`peer_collect_rscore()` collects the scores given by reviewers to authors and saves them in a new `.csv` file. 
+`peer_score()` collects the scores given by reviewers to authors. In this step, we want to collect the scores given **from reviewers** to authors, thus we specify `r from = "r"`. For the purpose of demonstration, below, we save the output in an object. In practice, we recommend setting `write_csv = TRUE` to save the output as a `.csv` file.
+```{r}
+rscores = peer_score(
+  org = "ghclass-test",
+  roster = roster_test,
+  from = "r",
+  file = "rfeedback_blank.Rmd",
+  dblind = TRUE,
+  prefix = prefix,
+  write_csv = F
+)
+rscores
+```
+
 
 ### [Optional] Strip individual scores given by reviewers
 If desired, the scores that reviewers entered into the YAML header of the reviewer feedback forms can be removed before distributing reviews back to the authors. If this is the case, authors can engage with the substantive feedback on their assignments, but do not see the scores given by the reviewers for each question.
@@ -82,12 +143,43 @@ If desired, the scores that reviewers entered into the YAML header of the review
 Only select files will be moved and saved in a new folder in authors' repositories.
 
 ### [Recommended] Create rating form for authors
-The `peer_create_aform()` can be used to create a author blank form used to collect authors' feedback on the reviews.
+The `peer_create_aform()` can be used to create a author blank RMarkdown form used to collect authors' feedback on the reviews. By default, three rating categories are included in the file: 
+
+1. `helpfulness`: The reviewer's feedback was constructive and helpful.
+2. `accuracy`: The reviewer's assessment accurately describes the quality of my work.
+3. `fairness`: The reviewer's assessment was fair.
+
+The rating categories can be adjusted via the `category` parameter.
+```{r}
+peer_create_aform(file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/afeedback_blank.Rmd", category = c("accuracy", "fairness"))
+```
+
 
 ### [Recommended] Distribute author rating forms 
-`peer_distr_aform()`
+```{r}
+peer_add_file(
+        org = "ghclass-test",
+        roster = roster_test,
+        to = "a",
+        file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/afeedback_blank.Rmd",
+        prefix = "hw2-"
+)
+```
+
 
 ## After author rating of reviews is completed
 
 ### [Recommended] Collect scores given by authors
-`peer_collect_ascore()` collects the scores given by reviewers to authors and saves them in a new `.csv` file. Depending on the function input, `peer_collect_ascore()` appends the scores either to the original roster `.csv` file or the `.csv` file that contains reviewer scores.
+Again, we can use `peer_score()` to collect the ratings given by authors to reviewers. This time, we want to collect the scores given **from authors** to reviewers, thus we specify `r from = "a"`. For the purpose of demonstration, below, we save the output in an object. In practice, we recommend setting `write_csv = TRUE` to save the output as a `.csv` file.
+```{r}
+ascores = peer_score(
+  org = "ghclass-test",
+  roster = roster_test,
+  from = "a",
+  file = "afeedback_blank.Rmd",
+  dblind = FALSE,
+  prefix = prefix,
+  write_csv = F
+)
+ascores
+```
