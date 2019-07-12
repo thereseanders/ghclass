@@ -1,106 +1,4 @@
-# The following two functions (peer_anonymize_file and remove_author_rmd) are prob not needed any longer if we decide not to include author as a YAML parameter
-
-#' Anonymize file
-#'
-#' `anonymize_file` removes all identifying student information
-#'
-#' @param file Character. Local file path.
-#'
-peer_anonymize_file = function(file) {
-  remove_author_rmd(file)
-}
-
-remove_author_rmd = function(input) {
-  sub(
-    '\\nauthor: \\"[aA-zZ]+ ([aA-zZ]+[ \\.]+)?[aA-zZ]+\"',
-    '\\nauthor: \\"Student x"',
-    input
-  )
-}
-
-#' Assign file to reviewers
-#'
-#' `peer_assign` adds files from authors' repositories to reviewers' repositories. The function appends the prefix "author_" to each file. It also removes information from the `author` field in RMarkdown files. To ensure anonymity of the author and subsequent workflow, students should be instructed not to change file names.
-#'
-#' @param repo1 Character. Address of author repository in "owner/name" format.
-#' @param repo2 Character or character vector. Address(es) of author repository or repositories in "owner/name" format.
-#' @param file Character. File name of file in `repo1` to be assigned to `repo2`.
-#' @param folder Character. Folder name of folder to be created in `repo2`.
-#' @param message Character. Commit message.
-#' @param branch Character. Name of branch the file should be committed to, defaults to `master`.
-#'
-#' @example
-#' \dontrun{
-#' peer_toreviewer_file("Sta523-Fa17/hw1-Melissa", "Sta523-Fa17/hw1-Paul", "hw1.Rmd", "Assining HW1 for review")
-#' }
-#'
-#' @export
-#'
-peer_assign = function(repo1,
-                       repo2,
-                       file,
-                       folder,
-                       message,
-                       branch = "master",
-                       overwrite = F) {
-  # Vectorization over file names for now
-  stopifnot(length(repo1) == 1)
-
-  # Force files to be .Rmd for now
-  stopifnot(all(grepl("\\.[rR]md$", file)))
-
-  file = list(file)
-
-  purrr::pwalk(list(file, folder, repo1, repo2, overwrite, message, branch),
-               function(file,
-                        folder,
-                        repo1,
-                        repo2,
-                        overwrite,
-                        message,
-                        branch) {
-                 # Step 1: grab file(s) from author repository
-                 purrr::walk(file,
-                             function(file) {
-                               content = get_file(repo = repo1,
-                                                  file = file,
-                                                  branch = branch)
-
-                               if (is.null(content)) {
-                                 usethis::ui_oops(
-                                   "Cannot locate file {usethis::ui_value(file)} in repository {usethis::ui_value(repo1)}"
-                                 )
-                               } else {
-                                 content_anonym = peer_anonymize_file(content)
-
-                                 # Function creates folder per author in the reviewers' repository
-                                 file_new = paste(folder,
-                                                  file,
-                                                  sep = "/")
-
-                                 purrr::walk(repo2,
-                                             function(repo2) {
-                                               if (!file_exists(repo2, file_new, branch, verbose = F) |
-                                                   overwrite == T) {
-                                                 put_file(
-                                                   repo = repo2,
-                                                   path = file_new,
-                                                   content = content_anonym,
-                                                   message = message,
-                                                   branch = branch
-                                                 )
-                                               } else {
-                                                 usethis::ui_oops(
-                                                   "Failed to add file {usethis::ui_value(file_new)} to {usethis::ui_value(repo2)}: already exists."
-                                                 )
-                                               }
-                                             })
-                               }
-                             })
-               })
-}
-
-
+# Helper function for Latin square
 g = function(j, n) {
   i <- seq_len(n)
   (((i - 1) + (j - 1)) %% n) + 1
@@ -155,6 +53,156 @@ peer_roster = function(m,
     res_df
   }
 }
+
+
+# The following two functions (peer_anonymize_file and remove_author_rmd) are prob not needed any longer if we decide not to include author as a YAML parameter
+
+peer_anonymize_file = function(file) {
+  remove_author_rmd(file)
+}
+
+remove_author_rmd = function(input) {
+  sub(
+    '\\nauthor: \\"[aA-zZ]+ ([aA-zZ]+[ \\.]+)?[aA-zZ]+\"',
+    '\\nauthor: \\"Student x"',
+    input
+  )
+}
+
+# Reads roster file
+peer_read_roster = function(roster){
+
+  res = purrr::safely(fs::file_exists)(roster)
+
+  if (is.null(res$result) & is.data.frame(roster)) {
+    return(tibble::as_tibble(purrr::modify_if(roster, is.factor, as.character)))
+  } else if (is.null(res$result) & !is.data.frame(roster)) {
+    usethis::ui_stop("{usethis::ui_field('roster')} must be a data.frame or .csv file.")
+  } else if (!res$result) {
+    usethis::ui_stop("Cannot locate file: {usethis::ui_value(roster)}")
+  } else if (res$result) {
+    suppressMessages(readr::read_csv(roster))
+  }
+
+}
+
+# Checks whether necessary column names are present
+peer_check_roster = function(roster){
+
+  val = c("user", "user_random")
+  purrr::walk(val,
+              function(val){
+                if (!(val %in% names(roster))) {
+                  usethis::ui_oops(
+                    "{usethis::ui_field('roster')} must contain column {usethis::ui_value(val)}"
+                  )
+                }
+              })
+
+  if (!(any(grepl("^r[0-9]+$", names(roster))))) {
+    usethis::ui_oops(
+      "{usethis::ui_field('roster')} must contain at least one column {usethis::ui_field('r*')}"
+    )
+  }
+}
+
+#' Assign file to reviewers
+#'
+#' `peer_assign` adds files from authors' repositories to reviewers' repositories.
+#'
+#' @param org Character. Name of GitHub Organization.
+#' @param roster Character. Data frame or file path of roster file with author-reviewer assignments. Must contain a column `user` with GitHub user names of authors, a column `user_random` with randomized tokens for user names, and one or more `r*` columns that specify review assignments as values of the vector `user_random`. See `peer_create_feedback`.
+#' @param file Character. File name or vector of file names to be included.
+#' @param prefix Character. Common repository name prefix.
+#' @param suffix Character. Common repository name suffix.
+#' @param message Character. Commit message, defaults to "Assigning review."
+#' @param branch Character. Name of branch the file should be committed to, defaults to `master`.
+#' @param overwrite Logical. Whether existing files in reviewers' repositories should be overwritten, defaults to `FALSE`.
+#'
+#' @example
+#' \dontrun{
+#' peer_assign(
+#' org = "ghclass-test",
+#' roster = "hw2_roster_seed12345.csv",
+#' file = c("task.Rmd", "iris_data.csv"),
+#' prefix = "hw2-"
+#' )
+#' }
+#'
+#' @export
+#'
+peer_assign = function(org,
+                       roster,
+                       file,
+                       prefix = "",
+                       suffix = "",
+                       message = "Assigning review",
+                       branch = "master",
+                       overwrite = FALSE) {
+
+  rdf = peer_read_roster(roster)
+  peer_check_roster(rdf)
+
+  file = as.list(file)
+
+  m = seq_len(length(names(rdf)[grepl("^r[0-9]+$", names(rdf))]))
+
+  author = as.list(as.character(rdf$user))
+  author_random = as.list(as.character(rdf$user_random))
+
+  purrr::walk2(author, author_random,
+               function(author, author_random) {
+                 repo1 = glue::glue("{org}/{prefix}{author}{suffix}")
+
+                 # First, get file content(s)
+                 content = purrr::map(file,
+                                      function(file) {
+                                        res = purrr::safely(get_file)(repo = repo1,
+                                                                      file = file,
+                                                                      branch = branch)
+                                        if (succeeded(res)) {
+                                          return(res$result)
+                                        } else {
+                                          usethis::ui_oops(
+                                            "Cannot locate {usethis::ui_value(file)} in repository {usethis::ui_value(repo)}"
+                                          )
+                                          return()
+                                        }
+                                      })
+
+                 # Grab reviewers
+                 reviewer_random = as.character(rdf[rdf$user == author, paste0("r", m)])
+                 reviewer = rdf$user[purrr::map_int(reviewer_random, ~ which(rdf$user_random == .x))]
+
+                 # Create folder paths (from perspective of reviewers)
+                 path = as.list(glue::glue("{author_random}/{file}"))
+
+                 purrr::walk(reviewer,
+                             function(reviewer) {
+                               repo2 = glue::glue("{org}/{prefix}{reviewer}{suffix}")
+                               purrr::walk2(path, content,
+                                            function(path, content) {
+                                              if (!file_exists(repo2, path, verbose = FALSE) | overwrite == TRUE) {
+                                                if (!is.null(content)) {
+                                                  put_file(
+                                                    repo = repo2,
+                                                    path = path,
+                                                    content = content,
+                                                    message = message,
+                                                    branch = branch
+                                                  )
+                                                }
+                                              } else {
+                                                usethis::ui_oops(
+                                                  "Failed to add {usethis::ui_value(path)} to {usethis::ui_value(repo2)}: already exists."
+                                                )
+                                              }
+                                            })
+                             })
+               })
+}
+
+
 
 #' Create reviewer feedback form
 #'
@@ -479,7 +527,7 @@ peer_collect_rscore = function(org,
 #'                          purrr::map_dfr(m,
 #'                                         function(m) {
 #'                                           reviewer_random = as.character(rdf[rdf$user == author, paste0("r", m)])
-#'                                           reviewer = rdf$user[which(rdf$user_random == reviewer_random)]
+#'                                           reviewer = rdf$user[purrr::map_int(reviewer_random, ~which(rdf$user_random == .x))]
 #'
 #'                                           # Get feedback file
 #'                                           repo = paste(org, paste0(prefix, reviewer, suffix), sep = "/")
