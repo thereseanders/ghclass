@@ -1,3 +1,5 @@
+## !!! Remember to run usethis::use_pipe() before PR !!!
+
 # Helper function for Latin square
 g = function(j, n) {
   i <- seq_len(n)
@@ -57,6 +59,7 @@ peer_roster = function(m,
 
 # The following two functions (peer_anonymize_file and remove_author_rmd) are prob not needed any longer if we decide not to include author as a YAML parameter
 
+# If we keep this function, it should just strip the author field from YAML
 peer_anonymize_file = function(file) {
   remove_author_rmd(file)
 }
@@ -104,12 +107,17 @@ peer_check_roster = function(roster) {
 
 
 
-peer_get_reviewer = function(author, roster){
+peer_get_reviewer = function(author, roster, anonym = FALSE) {
 
   m = seq_len(length(names(roster)[grepl("^r[0-9]+$", names(roster))]))
   reviewer_random = as.character(roster[roster$user == author, paste0("r", m)])
-  roster$user[purrr::map_int(reviewer_random, ~ which(roster$user_random == .x))]
+  reviewer = roster$user[purrr::map_int(reviewer_random, ~ which(roster$user_random == .x))]
 
+  if (!anonym) {
+    reviewer
+  } else {
+    reviewer_random
+  }
 }
 
 #' Assign file to reviewers
@@ -145,7 +153,6 @@ peer_assign = function(org,
                        message = "Assigning review",
                        branch = "master",
                        overwrite = FALSE) {
-
   arg_is_chr(org, file, prefix, suffix, branch)
   arg_is_chr(message, allow_null = TRUE)
   arg_is_lgl_scalar(overwrite)
@@ -177,7 +184,7 @@ peer_assign = function(org,
                                       })
 
                  # Grab reviewers
-                 reviewer = peer_get_reviewer(author, rdf)
+                 reviewer = peer_get_reviewer(author, rdf, anonym = FALSE)
 
                  # Create folder paths (from perspective of reviewers)
                  path = as.list(glue::glue("{author_random}/{file}"))
@@ -295,52 +302,6 @@ peer_create_rform = function(n,
   }
 }
 
-peer_distribute_rform = function(org,
-                                 roster,
-                                 file,
-                                 prefix = "",
-                                 suffix = "",
-                                 message = "Adding feedback form",
-                                 branch = "master",
-                                 overwrite = FALSE){
-
-  arg_is_chr(org, file, branch)
-  arg_is_chr(message, allow_null = TRUE)
-  arg_is_lgl_scalar(overwrite)
-
-  file_status = fs::file_exists(file)
-  if (any(!file_status))
-    usethis::ui_stop("Unable to locate the following file(s): {usethis::ui_value(file)}")
-
-  if (is.character(file) & (length(file) > 1))
-    file = list(file)
-
-  rdf = peer_read_roster(roster)
-  peer_check_roster(rdf)
-
-  author = as.list(as.character(rdf$user))
-  author_random = as.list(as.character(rdf$user_random))
-
-  purrr::walk2(author, author_random,
-               function(author, author_random) {
-
-                 # Grab reviewers
-                 reviewer = peer_get_reviewer(author, rdf)
-
-                 # Create folder paths (from perspective of reviewers)
-                 path = glue::glue("{author_random}/{file}")
-
-                 purrr::walk(reviewer,
-                             function(reviewer) {
-                               repo = glue::glue("{org}/{prefix}{reviewer}{suffix}")
-                               add_file(repo = repo,
-                                        file = file,
-                                        message = message,
-                                        preserve_path = FALSE)
-                             })
-               })
-}
-
 
 #' Create author feedback form
 #'
@@ -352,6 +313,7 @@ peer_distribute_rform = function(org,
 #' @param output Character. Output parameter for `.Rmd` file, defaults to `github_document`.
 #' @param write_rmd Logical. Whether the feedback form should be saved to a `.Rmd` file in the current working directory, defaults to TRUE.
 #' @param overwrite Logical. Should existing file or files with same name be overwritten, defaults to FALSE.
+#' @param author Logical. Should the YAML include an `author` field, defaults to TRUE.
 #'
 #' @example
 #' \dontrun{
@@ -365,7 +327,8 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
                              file = "afeedback_blank",
                              output = "github_document",
                              write_rmd = TRUE,
-                             overwrite = FALSE) {
+                             overwrite = FALSE,
+                             author = TRUE) {
   stopifnot(!is.null(file))
   if (grepl("\\s+", file)) {
     file = stringr::str_replace_all(file, "\\s", "_")
@@ -375,12 +338,16 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
   }
 
   # YAML
-  yaml_txt = sprintf(
-    "---\ntitle: \"%s\"\noutput: %s\nparams:\n%s\n---\n\n\n",
-    title,
-    output,
-    paste(paste0("  ", category, ": NA"), collapse = "\n")
-  )
+    yaml_txt = sprintf(
+      if(author){
+        "---\ntitle: \"%s\"\nauthor: \noutput: %s\nparams:\n%s\n---\n\n\n"
+      } else {
+        "---\ntitle: \"%s\"\noutput: %s\nparams:\n%s\n---\n\n\n"
+      },
+      title,
+      output,
+      paste(paste0("  ", category, ": NA"), collapse = "\n")
+    )
 
   # Instructions
   instruct_txt = sprintf(
@@ -451,6 +418,57 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
     doc_txt
   }
 }
+
+#' Add files to repositories based on roster
+#'
+#' `peer_add_file()` is the peer review version of `repo_add_file()`. It takes a local file and adds it to author- or reviewer-specific folders in students' repositories based on the peer review roster.
+#'
+peer_add_file = function(org,
+                         roster,
+                         file,
+                         to = c("r", "a"),
+                         prefix = "",
+                         suffix = "",
+                         message = NULL,
+                         branch = "master",
+                         overwrite = FALSE) {
+  arg_is_chr_scalar(to)
+  stopifnot(to %in% c("r", "a"))
+
+  rdf = peer_read_roster(roster)
+  peer_check_roster(rdf)
+
+  author = as.list(as.character(rdf$user))
+  author_random = as.list(as.character(rdf$user_random))
+
+  purrr::walk2(author, author_random,
+               function(author, author_random) {
+
+                 # Grab reviewers
+                 reviewer = peer_get_reviewer(author, rdf, anonym = FALSE)
+
+                 purrr::walk2(reviewer, reviewer_random,
+                              function(reviewer, reviewer_random) {
+
+                                if (to == "r") {
+                                  repo = glue::glue("{org}/{prefix}{reviewer}{suffix}")
+                                  folder = author_random
+                                } else {
+                                  repo = glue::glue("{org}/{prefix}{author}{suffix}")
+                                  folder = reviewer_random
+                                }
+
+                                repo_add_file(
+                                  repo = repo,
+                                  file = file,
+                                  folder = folder,
+                                  preserve_path = FALSE
+                                )
+                              })
+               })
+}
+
+
 
 
 #' Collect scores from reviewer feedback forms
