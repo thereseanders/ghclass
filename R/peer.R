@@ -37,7 +37,7 @@ peer_roster = function(m,
   # Randomizing user names to avoid clustering
   user_random = paste0("a", sample(1:length(user), length(user)))
   df_sort = data.frame(user = user,
-                       user_random = as.character(user_random))[order(as.numeric(sub("[aA-zZ]+", "", user_random))), ]
+                       user_random = as.character(user_random))[order(as.numeric(sub("[aA-zZ]+", "", user_random))),]
 
   res_df = setNames(data.frame(df_sort,
                                do.call(
@@ -50,7 +50,7 @@ peer_roster = function(m,
     readr::write_csv(res_df, fname)
     usethis::ui_done("Saved file {usethis::ui_value(fname)} to working directory.")
   } else {
-    res_df
+    tibble::as_tibble(purrr::modify_if(res_df, is.factor, as.character))
   }
 }
 
@@ -70,8 +70,7 @@ remove_author_rmd = function(input) {
 }
 
 # Reads roster file
-peer_read_roster = function(roster){
-
+peer_read_roster = function(roster) {
   res = purrr::safely(fs::file_exists)(roster)
 
   if (is.null(res$result) & is.data.frame(roster)) {
@@ -87,15 +86,12 @@ peer_read_roster = function(roster){
 }
 
 # Checks whether necessary column names are present
-peer_check_roster = function(roster){
-
+peer_check_roster = function(roster) {
   val = c("user", "user_random")
   purrr::walk(val,
-              function(val){
+              function(val) {
                 if (!(val %in% names(roster))) {
-                  usethis::ui_oops(
-                    "{usethis::ui_field('roster')} must contain column {usethis::ui_value(val)}"
-                  )
+                  usethis::ui_oops("{usethis::ui_field('roster')} must contain column {usethis::ui_value(val)}")
                 }
               })
 
@@ -104,6 +100,16 @@ peer_check_roster = function(roster){
       "{usethis::ui_field('roster')} must contain at least one column {usethis::ui_field('r*')}"
     )
   }
+}
+
+
+
+peer_get_reviewer = function(author, roster){
+
+  m = seq_len(length(names(roster)[grepl("^r[0-9]+$", names(roster))]))
+  reviewer_random = as.character(roster[roster$user == author, paste0("r", m)])
+  roster$user[purrr::map_int(reviewer_random, ~ which(roster$user_random == .x))]
+
 }
 
 #' Assign file to reviewers
@@ -140,12 +146,12 @@ peer_assign = function(org,
                        branch = "master",
                        overwrite = FALSE) {
 
+  arg_is_chr(org, file, prefix, suffix, branch)
+  arg_is_chr(message, allow_null = TRUE)
+  arg_is_lgl_scalar(overwrite)
+
   rdf = peer_read_roster(roster)
   peer_check_roster(rdf)
-
-  file = as.list(file)
-
-  m = seq_len(length(names(rdf)[grepl("^r[0-9]+$", names(rdf))]))
 
   author = as.list(as.character(rdf$user))
   author_random = as.list(as.character(rdf$user_random))
@@ -164,15 +170,14 @@ peer_assign = function(org,
                                           return(res$result)
                                         } else {
                                           usethis::ui_oops(
-                                            "Cannot locate {usethis::ui_value(file)} in repository {usethis::ui_value(repo)}"
+                                            "Cannot locate {usethis::ui_value(file)} in repository {usethis::ui_value(repo1)}"
                                           )
                                           return()
                                         }
                                       })
 
                  # Grab reviewers
-                 reviewer_random = as.character(rdf[rdf$user == author, paste0("r", m)])
-                 reviewer = rdf$user[purrr::map_int(reviewer_random, ~ which(rdf$user_random == .x))]
+                 reviewer = peer_get_reviewer(author, rdf)
 
                  # Create folder paths (from perspective of reviewers)
                  path = as.list(glue::glue("{author_random}/{file}"))
@@ -182,14 +187,16 @@ peer_assign = function(org,
                                repo2 = glue::glue("{org}/{prefix}{reviewer}{suffix}")
                                purrr::walk2(path, content,
                                             function(path, content) {
-                                              if (!file_exists(repo2, path, verbose = FALSE) | overwrite == TRUE) {
+                                              if (!file_exists(repo2, path, verbose = FALSE) |
+                                                  overwrite == TRUE) {
                                                 if (!is.null(content)) {
                                                   put_file(
                                                     repo = repo2,
                                                     path = path,
                                                     content = content,
                                                     message = message,
-                                                    branch = branch
+                                                    branch = branch,
+                                                    verbose = TRUE
                                                   )
                                                 }
                                               } else {
@@ -204,6 +211,8 @@ peer_assign = function(org,
 
 
 
+
+
 #' Create reviewer feedback form
 #'
 #' `peer_create_rform` creates blank feedback forms for reviewers based on the user-specified number of questions.
@@ -213,6 +222,7 @@ peer_assign = function(org,
 #' @param file Character. File name of RMarkdown document, defaults to `rfeedback_blank`.
 #' @param output Character. Output parameter for `.Rmd` file, defaults to `github_document`.
 #' @param write_rmd Logical. Whether the feedback form should be saved to a `.Rmd` file in the current working directory, defaults to TRUE.
+#' @param overwrite Logical. Should existing file or files with same name be overwritten, defaults to FALSE.
 #'
 #' @example
 #' \dontrun{
@@ -225,7 +235,8 @@ peer_create_rform = function(n,
                              title = "Reviewer feedback form",
                              file = "rfeedback_blank",
                              output = "github_document",
-                             write_rmd = TRUE) {
+                             write_rmd = TRUE,
+                             overwrite = FALSE) {
   stopifnot(!is.null(file))
   if (grepl("\\s+", file)) {
     file = stringr::str_replace_all(file, "\\s", "_")
@@ -266,12 +277,68 @@ peer_create_rform = function(n,
   # Ensure an empty line at the end of the file
   doc_txt = paste0(yaml_txt, body_txt, "\n")
 
-
   if (write_rmd) {
-    cat(doc_txt, file = paste0(file, ".Rmd"))
+    fname = paste0(file, ".Rmd")
+    if (!(fs::file_exists(fname)) | overwrite) {
+      cat(doc_txt, file = fname)
+      usethis::ui_done("Saved file {usethis::ui_value(fname)}")
+    } else {
+      usethis::ui_oops(
+        paste(
+          'File {usethis::ui_value(fname)} already exists.',
+          'If you want to force save this file, re-run the command with {usethis::ui_code("overwrite = TRUE")}.'
+        )
+      )
+    }
   } else {
     doc_txt
   }
+}
+
+peer_distribute_rform = function(org,
+                                 roster,
+                                 file,
+                                 prefix = "",
+                                 suffix = "",
+                                 message = "Adding feedback form",
+                                 branch = "master",
+                                 overwrite = FALSE){
+
+  arg_is_chr(org, file, branch)
+  arg_is_chr(message, allow_null = TRUE)
+  arg_is_lgl_scalar(overwrite)
+
+  file_status = fs::file_exists(file)
+  if (any(!file_status))
+    usethis::ui_stop("Unable to locate the following file(s): {usethis::ui_value(file)}")
+
+  if (is.character(file) & (length(file) > 1))
+    file = list(file)
+
+  rdf = peer_read_roster(roster)
+  peer_check_roster(rdf)
+
+  author = as.list(as.character(rdf$user))
+  author_random = as.list(as.character(rdf$user_random))
+
+  purrr::walk2(author, author_random,
+               function(author, author_random) {
+
+                 # Grab reviewers
+                 reviewer = peer_get_reviewer(author, rdf)
+
+                 # Create folder paths (from perspective of reviewers)
+                 path = glue::glue("{author_random}/{file}")
+
+                 purrr::walk(reviewer,
+                             function(reviewer) {
+                               repo = glue::glue("{org}/{prefix}{reviewer}{suffix}")
+                               add_file(repo = repo,
+                                        file = file,
+                                        message = message,
+                                        preserve_path = FALSE)
+                             })
+               })
 }
 
 
@@ -284,6 +351,7 @@ peer_create_rform = function(n,
 #' @param file Character. File name of RMarkdown document, defaults to `rfeedback_blank`.
 #' @param output Character. Output parameter for `.Rmd` file, defaults to `github_document`.
 #' @param write_rmd Logical. Whether the feedback form should be saved to a `.Rmd` file in the current working directory, defaults to TRUE.
+#' @param overwrite Logical. Should existing file or files with same name be overwritten, defaults to FALSE.
 #'
 #' @example
 #' \dontrun{
@@ -296,7 +364,8 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
                              title = "Author feedback form",
                              file = "afeedback_blank",
                              output = "github_document",
-                             write_rmd = TRUE) {
+                             write_rmd = TRUE,
+                             overwrite = FALSE) {
   stopifnot(!is.null(file))
   if (grepl("\\s+", file)) {
     file = stringr::str_replace_all(file, "\\s", "_")
@@ -366,7 +435,18 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
   doc_txt = paste0(yaml_txt, body_txt, "\n")
 
   if (write_rmd) {
-    cat(doc_txt, file = paste0(file, ".Rmd"))
+    fname = paste0(file, ".Rmd")
+    if (!(fs::file_exists(fname)) | overwrite) {
+      cat(doc_txt, file = fname)
+      usethis::ui_done("Saved file {usethis::ui_value(fname)}")
+    } else {
+      usethis::ui_oops(
+        paste(
+          'File {usethis::ui_value(fname)} already exists.',
+          'If you want to force save this file, re-run the command with {usethis::ui_code("overwrite = TRUE")}.'
+        )
+      )
+    }
   } else {
     doc_txt
   }
@@ -468,7 +548,7 @@ peer_collect_rscore = function(org,
                        }) %>%
 
     # Getting data frame in right format
-    tidyr::gather(q_name, q_value,-user,-r_no) %>%
+    tidyr::gather(q_name, q_value, -user, -r_no) %>%
     tidyr::unite("q", c("r_no", "q_name")) %>%
     tidyr::spread(q, q_value) %>%
     merge(rdf, all.y = T)
