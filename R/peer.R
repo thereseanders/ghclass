@@ -237,7 +237,7 @@ peer_assign = function(org,
 #'
 #' @example
 #' \dontrun{
-#' peer_create_rform(5, "Reviewer feedback for HW1", "rfeedback_hw1_blank")
+#' peer_create_rform(5, "Reviewer feedback for HW2", "rfeedback_hw2_blank")
 #' }
 #'
 #' @export
@@ -429,12 +429,22 @@ peer_create_aform = function(category = c("helpfulness", "accuracy", "fairness")
 #' @param roster Character. Data frame or file path of roster file with author-reviewer assignments. Must contain a column `user` with GitHub user names of authors, a column `user_random` with randomized tokens for user names, and one or more `r*` columns that specify review assignments as values of the vector `user_random`. See `peer_create_rform`.
 #' @param to Character. Specifies whether the file is to be added to reviewers' (`r`) or authors' (`a`) folders. If `to = "r"`, the function places the file into each of the folders containing the anonymized author id on reviewers' repositores. If `to = "a"`, the function places the file into each of the folders containing the reviewers' files on authors' repositories.
 #' @param file Character. File name of file to be added.
-#' @param dblind Logical. Specifies whether review is conducted double-blind (i.e. neither reviewer nor author can identify each other), or single-blind (i.e. authors remain anonymous but reviewer identities are revealed). If `dblind = TRUE`, reviewer folders are identified by the anonymized user IDs in the roster's `user_random` column. If `dblind = FALSE`, reviewer folders are identified by the original user names. Defaults to `FALSE`.
+#' @param dblind Logical. Specifies whether review is conducted double-blind (i.e. neither reviewer nor author can identify each other), or single-blind (i.e. authors remain anonymous but reviewer identities are revealed). If `dblind = TRUE`, reviewer folders are identified by the reviewer's ID. If `dblind = FALSE`, reviewer folders are identified by the original user names. Defaults to `FALSE`.
 #' @param prefix Character. Common repository name prefix.
 #' @param suffix Character. Common repository name suffix.
 #' @param message Character. Commit message.
 #' @param branch Character. Name of branch the file should be committed to, defaults to `master`.
 #' @param overwrite Logical. Whether existing files in reviewers' repositories should be overwritten, defaults to `FALSE`.
+#'
+#' @example
+#' \dontrun{
+#' peer_add_file(org = "ghclass-test",
+#' roster = "hw2_roster_seed12345.csv",
+#' to = "r",
+#' file = "rfeedback_hw2_blank.Rmd",
+#' prefix = "hw2-",
+#' dblind = TRUE)
+#' }
 #'
 #' @export
 peer_add_file = function(org,
@@ -458,21 +468,21 @@ peer_add_file = function(org,
 
   purrr::walk2(author, author_random,
                function(author, author_random) {
-                 # Grab reviewers
-                 reviewer = peer_get_reviewer(author, rdf, anonym = FALSE)
-                 reviewer_random = peer_get_reviewer(author, rdf, anonym = TRUE)
 
-                 purrr::walk2(reviewer, reviewer_random,
-                              function(reviewer, reviewer_random) {
+                 reviewer = peer_get_reviewer(author, rdf, anonym = FALSE)
+                 reviewer_no = paste0("r", seq_len(length(reviewer)))
+
+                 purrr::walk2(reviewer, reviewer_no,
+                              function(reviewer, reviewer_no) {
                                 if (to == "r") {
                                   repo = as.character(glue::glue("{org}/{prefix}{reviewer}{suffix}"))
                                   folder = author_random
                                 } else {
                                   repo = as.character(glue::glue("{org}/{prefix}{author}{suffix}"))
-                                  if (dblind) {
-                                    folder = reviewer_random
-                                  } else {
+                                  if (!dblind) {
                                     folder = reviewer
+                                  } else {
+                                    folder = reviewer_no
                                   }
                                 }
 
@@ -502,6 +512,17 @@ peer_add_file = function(org,
 #' @param prefix Character. Common repository name prefix.
 #' @param suffix Character. Common repository name suffix.
 #' @param write_csv Logical. Whether the roster data frame should be saved to a `.csv` file in the current working directory, defaults to TRUE.
+#'
+#' @example
+#' \dontrun{
+#' peer_score(
+#' org = "ghclass-test",
+#' roster = "hw2_roster_seed12345.csv",
+#' from = "a",
+#' file = "afeedback_blank.Rmd",
+#' dblind = T,
+#' prefix = "hw2-)
+#' }
 #'
 #' @export
 #'
@@ -542,9 +563,8 @@ peer_score = function(org,
                           reviewer_random = peer_get_reviewer(author, rdf, anonym = TRUE)
                           reviewer_no = paste0("r", seq_len(length(reviewer)))
 
-                          purrr::pmap_dfr(list(reviewer, reviewer_random, reviewer_no),
+                          purrr::pmap_dfr(list(reviewer, reviewer_no),
                                           function(reviewer,
-                                                   reviewer_random,
                                                    reviewer_no) {
                                             if (from == "r") {
                                               repo = glue::glue("{org}/{prefix}{reviewer}{suffix}")
@@ -558,7 +578,7 @@ peer_score = function(org,
                                               user = reviewer
                                               r_no = paste0("r", which(peer_get_reviewer(user, rdf) == author))
                                               if (dblind) {
-                                                ghpath = glue::glue("{reviewer_random}/{file}")
+                                                ghpath = glue::glue("{reviewer_no}/{file}")
                                               } else {
                                                 ghpath = glue::glue("{reviewer}/{file}")
                                               }
@@ -599,3 +619,101 @@ peer_score = function(org,
 }
 
 
+#' Return peer feedback to authors
+#'
+#' @param org Character. Name of GitHub Organization.
+#' @param roster Character. Data frame or file path of roster file with author-reviewer assignments. Must contain a column `user` with GitHub user names of authors, a column `user_random` with randomized tokens for user names, and one or more `r*` columns that specify review assignments as values of the vector `user_random`. See `peer_create_feedback`.
+#' @param file Character. File name or vector of file names to be included.
+#' @param dblind Logical. Specifies whether review is conducted double-blind (i.e. neither reviewer nor author can identify each other), or single-blind (i.e. authors remain anonymous but reviewer identities are revealed). If `dblind = TRUE`, reviewer folders are identified by the anonymized user IDs in the roster's `user_random` column. If `dblind = FALSE`, reviewer folders are identified by the original user names. Defaults to `FALSE`.
+#' @param prefix Character. Common repository name prefix.
+#' @param suffix Character. Common repository name suffix.
+#' @param message Character. Commit message, defaults to "Assigning review."
+#' @param branch Character. Name of branch the file should be committed to, defaults to `master`.
+#' @param overwrite Logical. Whether existing files in reviewers' repositories should be overwritten, defaults to `FALSE`.
+#'
+#' @example
+#' \dontrun{
+#' peer_return(org = "ghclass-test,
+#' roster = "hw2_roster_seed12345.csv",
+#' file = c("hw2_task.Rmd", "rfeedback_blank.Rmd"),
+#' prefix = "hw2-,
+#' dblind = T)
+#' }
+#'
+#' @export
+#'
+peer_return = function(org,
+                       roster,
+                       file,
+                       dblind = FALSE,
+                       prefix = "",
+                       suffix = "",
+                       message = "Returning review",
+                       branch = "master",
+                       overwrite = FALSE) {
+
+  arg_is_chr(org, file, prefix, suffix, branch)
+  arg_is_chr(message, allow_null = TRUE)
+  arg_is_lgl_scalar(overwrite)
+
+  rdf = peer_read_roster(roster)$rdf
+  peer_check_roster(rdf)
+
+  author = as.list(as.character(rdf$user))
+  author_random = as.list(as.character(rdf$user_random))
+
+  purrr::walk2(author, author_random,
+               function(author, author_random){
+
+                 repo_a = glue::glue("{org}/{prefix}{author}{suffix}")
+                 ghpath_r = glue::glue("{author_random}/{file}")
+
+                 # reviewer-specific elements
+                 reviewer = peer_get_reviewer(author, rdf, anonym = FALSE)
+                 reviewer_no = paste0("r", seq_len(length(reviewer)))
+                 repo_r = glue::glue("{org}/{prefix}{reviewer}{suffix}")
+
+                 purrr::pwalk(list(reviewer, reviewer_no, repo_r),
+                             function(reviewer, reviewer_no, repo_r){
+
+                               if (!dblind) {
+                                 ghpath_a = glue::glue("{reviewer}/{file}")
+                               } else {
+                                 ghpath_a = glue::glue("{reviewer_no}/{file}")
+                               }
+
+                               content = purrr::map(ghpath_r,
+                                                    function(ghpath_r) {
+                                                      if (file_exists(repo = repo_r, file = ghpath_r)) {
+                                                        res = purrr::safely(get_file)(repo = repo_r,
+                                                                                      file = ghpath_r,
+                                                                                      branch = branch)
+                                                        if (succeeded(res)) {
+                                                          res$result
+                                                        }
+                                                      }
+                                                    })
+
+                               purrr::walk2(content, ghpath_a,
+                                            function(content, ghpath_a){
+                                              if (!file_exists(repo_a, ghpath_a, verbose = FALSE) |
+                                                  overwrite == TRUE) {
+                                                if (!is.null(content)) {
+                                                  put_file(
+                                                    repo = repo_a,
+                                                    path = ghpath_a,
+                                                    content = content,
+                                                    message = message,
+                                                    branch = branch,
+                                                    verbose = TRUE
+                                                  )
+                                                }
+                                              } else {
+                                                usethis::ui_oops(
+                                                  "Failed to add {usethis::ui_value(ghpath_a)} to {usethis::ui_value(repo_a)}: already exists."
+                                                )
+                                              }
+                                            })
+                             })
+                 })
+}
