@@ -18,7 +18,7 @@ g = function(j, n) {
 #'
 #' @example
 #' \dontrun{
-#' peer_roster(c("anya", "bruno", "celine", "diego"), 3)
+#' peer_roster(3, c("anya", "bruno", "celine", "diego"))
 #' }
 #'
 #' @export
@@ -113,6 +113,7 @@ peer_check_roster = function(roster) {
 
 
 peer_get_reviewer = function(author, roster, anonym = FALSE) {
+
   m = seq_len(length(names(roster)[grepl("^r[0-9]+$", names(roster))]))
   reviewer_random = as.character(roster[roster$user == author, paste0("r", m)])
   reviewer = roster$user[purrr::map_int(reviewer_random, ~ which(roster$user_random == .x))]
@@ -259,7 +260,7 @@ peer_create_rform = function(n,
 
   # YAML
   yaml_txt = sprintf(if (!dblind) {
-    "---\ntitle: \"%s\"\nauthor: \noutput: %s\nparams:\n%s\n---\n\n\n"
+    "---\ntitle: \"%s\"\nauthor: NA\noutput: %s\nparams:\n%s\n---\n\n\n"
   } else {
     "---\ntitle: \"%s\"\noutput: %s\nparams:\n%s\n---\n\n\n"
   },
@@ -491,7 +492,8 @@ peer_add_file = function(org,
                                   repo = repo,
                                   file = file,
                                   folder = folder,
-                                  preserve_path = FALSE
+                                  preserve_path = FALSE,
+                                  overwrite = overwrite
                                 )
                               })
                })

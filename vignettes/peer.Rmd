@@ -24,7 +24,7 @@ h2 { /* Header 2 */
   color: DarkBlue;
 }
 h3 { /* Header 3 */
-  font-size: 16px;
+  font-size: 14px;
   color: Black;
 }
 </style>
@@ -48,7 +48,7 @@ library(ghclass)
 devtools::load_all()
 # 1) Set up vector of student user names, HW identifier prefix, and organization name
 user = c("thereseanders", "thereanders", "tnaanders")
-prefix = "hw-new-"
+prefix = "hw-new2-"
 org = "ghclass-test"
 dblind = TRUE
 
@@ -58,7 +58,7 @@ create_repo(org, user, prefix = prefix)
 # 3) Add students to their individual repos
 add_user_to_repo(glue::glue("{org}/{prefix}{user}"), user)
 
-# 4) Place homework instructions and files in repositories
+# 4) Place homework files in repositories
 task <- "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/hw2_task.Rmd"
 data <- "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/iris_data.csv"
 repo_add_file(get_repo(org, filter = prefix),
@@ -72,7 +72,14 @@ repo_add_file(get_repo(org, filter = prefix),
 
 Given a vector of GitHub user names, the `peer_roster()` function creates data frame of random assignments of author files to reviewers. The parameter `m` specifies the number of reviewers per assignment. Instructors should choose the number of reviewers per assignment carefully, as each additional review will significantly increase the time investment for students.
 
-The function automatically randomizes the order in which students are assigned to review their peers' work. A seed is set to make the assignment of authors to reviewers reproducible. If the function default of `write_csv = TRUE` is selected, the function writes the roster to a .csv file. We recommend for instructors to set `write_csv = TRUE`, because the seed that was used to create the roster is automatically incorporated into the file name of the output
+The function automatically randomizes the order in which students are assigned to review their peers' work. A seed is set to make the assignment of authors to reviewers reproducible. If the function default of `write_csv = TRUE` is selected, the function writes the roster to a .csv file. We recommend for instructors to set `write_csv = TRUE`, because the seed that was used to create the roster is automatically incorporated into the file name of the output.
+
+The roster file should be read as follows. 
+
+- `user` lists students' GitHub user names
+- `user_random` randomizes the order of user names and gives each user an anonymous ID, in the pattern `a*`.
+- The `r*` column(s) specify the randomized user ID of the student(s) that should review the user's assignment.
+
 ```{r}
 roster_test = peer_roster(2, user, write_csv = F, seed = 678)
 roster_test
@@ -100,7 +107,7 @@ Instructors can use the `peer_create_rform()` function to create a blank feedbac
 
 By default, the files contain an `author` field in the YAML header to prompt reviewers to identify themselves. Keeping reviewers non-anonymous (as opposed to authors) is likely to discourage overly harsh or rude reviews. If reviewers should instead stay anonymous as well, setting `author = FALSE` will remove this field.
 ```{r}
-peer_create_rform(5,
+peer_create_rform(2,
                   file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/rfeedback_blank.Rmd")
 ```
 
@@ -118,6 +125,8 @@ peer_add_file(
 )
 ```
 
+### Instructions for students
+1) Pull changes to get author files to the local version of the repository.
 
 ## After review process is completed
 
@@ -133,7 +142,8 @@ rscores = peer_score(
   prefix = prefix,
   write_csv = F
 )
-rscores
+rscores %>%
+  dplyr::arrange(user_random)
 ```
 
 
@@ -172,8 +182,9 @@ peer_add_file(
         roster = roster_test,
         to = "a",
         file = "/Users/thereseanders/Documents/RStudio/introggplot2/hw2/afeedback_blank.Rmd",
-        prefix = "hw2-",
-        dblind = dblind
+        prefix = prefix,
+        dblind = dblind,
+        overwrite = T
 )
 ```
 
@@ -192,5 +203,31 @@ ascores = peer_score(
   prefix = prefix,
   write_csv = F
 )
-ascores
+ascores %>%
+  dplyr::arrange(user_random)
 ```
+
+
+# Issues and recommendations
+
+## Student work load and timing
+Peer review is great! It gives students a chance to learn from each other, get meaningful, substantive feedback on their code, and reduces the overhead of grading in introductory data science classes. However, asking students to review each others' work also increases their workload. Thus, instructors should carefully consider
+
+1. The amount of peer-reviewed homework assignments in each course
+2. The number of reviewers per assignment
+3. The timing of deadlines for the assignment and reviews
+
+### Number of homework assignments
+Writing a meaningful review with constructive comments is a learning process and it takes time! Thus, when implementing peer review in a course, instructors should consider reducing either the number or the scope of assignments to give students sufficient time to complete and engage with reviews. 
+
+### Number of reviewers
+On the one hand, more reviewers means more feedback and less weight to outlier reviews for grading, so more is better, right? On the other hand, more reviewers also means more student hours spent on giving feedback and not working on their final projects, learning new skills, or recharging. Plus, how much different will the feedback from each additional reviewer be after two or three reviews? Thus, we recommend to assign between two and three reviewers per assignment to balance the benefits of having multiple reviews and the demand on students' time/diminishing returns.
+
+### Timing
+Instructors should carefully consider the timing of deadlines for a) the assignment, b) the completion of the review, and c) the completion of the author rating of reviewers' feedback. Consider the following example. Your course is scheduled on Mondays and Wednesday, and you prefer to give students time over the weekend to complete assignments.
+
+
+
+
+## API rate limits
+
